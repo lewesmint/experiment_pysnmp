@@ -45,12 +45,15 @@ This report explains how the end-to-end integration harness works for:
 
 ### Test 3: Completion trap
 - `cleartraps`
-- `send-completion-trap CLI 200 127.0.0.1 162`
+- `setstr mgr1 1.3.6.1.2.1.1.6.0 model-normal 2.0`
+- `assert-result mgr1 RESULT_OK`
 - `wait-trap completion 5.0`
 
 ### Test 4: Event trap
 - `cleartraps`
-- `send-event-trap 4 "Power supply alarm" 127.0.0.1 162`
+- `setstr mgr1 1.3.6.1.2.1.1.6.0 alarm-major 2.0`
+- `assert-result mgr1 RESULT_OK`
+- `wait-trap completion 5.0`
 - `wait-trap event 5.0`
 
 ### Test 5: Regular trap
@@ -68,6 +71,13 @@ Trap kind is determined in `trap_thread.py` using trap OID:
 - Completion trap OID: `1.3.6.1.4.1.99998.0.2`
 - Event trap OID: `1.3.6.1.4.1.99998.0.3`
 - Any other trap OID -> classified as value-change trap
+
+## Behavior Model Ownership
+Trap generation for completion/event is now in the simulator agent runtime:
+- On successful SNMP SET commit, the agent emits a completion trap.
+- If the SET transitions a value from non-alarm to alarm-like state, the agent emits an event trap.
+
+The manager harness no longer auto-emits modeled completion/event traps after SET, so integration results reflect true agent behavior.
 
 ## Machine-Readable Summary Output
 At the end of script execution, `manager_app.py` now emits one of:
