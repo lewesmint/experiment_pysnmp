@@ -56,6 +56,9 @@ from trap_thread import (
 logger = logging.getLogger(__name__)
 
 
+ALARM_KEYWORDS = ("alarm", "fault", "critical", "major", "minor")
+
+
 @dataclass
 class ManagerRecord:
     """Named container for a manager instance."""
@@ -74,6 +77,9 @@ class ManagerApp:
         self._trap_printer_started = False
         self._agent_url = agent_url.rstrip("/")
         self._assert_failures = 0
+        self._model_state: dict[str, str] = {}
+        self._model_completion_on_set = True
+        self._model_event_on_alarm_transition = True
 
     def _start_background_workers(self) -> None:
         if not self._trap_printer_started:
@@ -329,6 +335,8 @@ class ManagerApp:
 
         if mgr.completion_event.wait(timeout + 0.5):
             logger.info(self._format_result(mgr))
+            if int(mgr.result_code) == int(RESULT_OK):
+                self._emit_modeled_set_traps(oid_text, str(int_value))
         else:
             logger.warning("SET: no completion event observed")
 
@@ -354,6 +362,8 @@ class ManagerApp:
 
         if mgr.completion_event.wait(timeout + 0.5):
             logger.info(self._format_result(mgr))
+            if int(mgr.result_code) == int(RESULT_OK):
+                self._emit_modeled_set_traps(oid_text, str_value)
         else:
             logger.warning("SET: no completion event observed")
 
@@ -600,7 +610,7 @@ class ManagerApp:
             self._assert_failures += 1
 
     def _cmd_send_completion_trap(self, args: list[str]) -> None:
-        """Trigger completionTrap via snmp-sim REST API.
+        """Send completionTrap directly over SNMP.
 
         Usage:
             send-completion-trap [source] [code] [dest_host] [dest_port]
@@ -611,15 +621,7 @@ class ManagerApp:
         dest_port = int(args[3]) if len(args) >= 4 else 162
 
         try:
-            self._send_trap_direct(
-                trap_oid="1.3.6.1.4.1.99998.0.2",
-                dest_host=dest_host,
-                dest_port=dest_port,
-                var_binds=[
-                    ("1.3.6.1.4.1.99998.1.1.3", OctetString(source)),
-                    ("1.3.6.1.4.1.99998.1.1.4", Integer(code)),
-                ],
-            )
+            self._send_completion_trap(source, code, dest_host, dest_port)
             logger.info(
                 "Triggered completion trap (%s/%s) to %s:%s",
                 source,
@@ -628,11 +630,11 @@ class ManagerApp:
                 dest_port,
             )
         except requests.RequestException as exc:
-            logger.error("FAIL: send-completion-trap HTTP error: %s", exc)
+            logger.error("FAIL: send-completion-trap error: %s", exc)
             self._assert_failures += 1
 
     def _cmd_send_event_trap(self, args: list[str]) -> None:
-        """Trigger eventTrap via snmp-sim REST API.
+        """Send eventTrap directly over SNMP.
 
         Usage:
             send-event-trap [severity] [text] [dest_host] [dest_port]
@@ -643,15 +645,7 @@ class ManagerApp:
         dest_port = int(args[3]) if len(args) >= 4 else 162
 
         try:
-            self._send_trap_direct(
-                trap_oid="1.3.6.1.4.1.99998.0.3",
-                dest_host=dest_host,
-                dest_port=dest_port,
-                var_binds=[
-                    ("1.3.6.1.4.1.99998.1.1.5", Integer(severity)),
-                    ("1.3.6.1.4.1.99998.1.1.6", OctetString(text)),
-                ],
-            )
+            self._send_event_trap(severity, text, dest_host, dest_port)
             logger.info(
                 "Triggered event trap (%s/%s) to %s:%s",
                 severity,
@@ -660,11 +654,11 @@ class ManagerApp:
                 dest_port,
             )
         except requests.RequestException as exc:
-            logger.error("FAIL: send-event-trap HTTP error: %s", exc)
+            logger.error("FAIL: send-event-trap error: %s", exc)
             self._assert_failures += 1
 
     def _cmd_send_regular_trap(self, args: list[str]) -> None:
-        """Trigger a regular test trap (coldStart) via snmp-sim REST API.
+        """Send a regular test trap (coldStart) directly over SNMP.
 
         Usage:
             send-regular-trap [dest_host] [dest_port]
@@ -673,16 +667,120 @@ class ManagerApp:
         dest_port = int(args[1]) if len(args) >= 2 else 162
 
         try:
-            self._send_trap_direct(
-                trap_oid="1.3.6.1.6.3.1.1.5.1",
-                dest_host=dest_host,
-                dest_port=dest_port,
-                var_binds=[],
-            )
+            self._send_regular_trap(dest_host, dest_port)
             logger.info("Triggered regular trap to %s:%s", dest_host, dest_port)
         except requests.RequestException as exc:
-            logger.error("FAIL: send-regular-trap HTTP error: %s", exc)
+            logger.error("FAIL: send-regular-trap error: %s", exc)
             self._assert_failures += 1
+
+    def _emit_modeled_set_traps(self, oid_text: str, value_text: str) -> None:
+        """Emit modeled traps after a successful SET transition.
+
+        The behavior model is intentionally simple:
+        - Always emit a completion trap for successful SET.
+        - Emit an event trap when the value transitions into an alarm-like state.
+        """
+        previous_value = self._model_state.get(oid_text)
+        self._model_state[oid_text] = value_text
+
+        try:
+            if self._model_completion_on_set:
+                self._send_completion_trap(
+                    source=f"SET {oid_text}",
+                    code=0,
+                    dest_host="127.0.0.1",
+                    dest_port=162,
+                )
+        except requests.RequestException as exc:
+            logger.error("FAIL: modeled completion trap send failed: %s", exc)
+            self._assert_failures += 1
+
+        try:
+            if (
+                self._model_event_on_alarm_transition
+                and self._is_alarm_transition(previous_value, value_text)
+            ):
+                self._send_event_trap(
+                    severity=self._infer_event_severity(value_text),
+                    text=f"Alarm state entered on {oid_text}: {value_text}",
+                    dest_host="127.0.0.1",
+                    dest_port=162,
+                )
+        except requests.RequestException as exc:
+            logger.error("FAIL: modeled event trap send failed: %s", exc)
+            self._assert_failures += 1
+
+    def _is_alarm_transition(self, previous_value: str | None, current_value: str) -> bool:
+        """Return True when value transitions from non-alarm into alarm-like state."""
+        prev_alarm = self._is_alarm_like(previous_value) if previous_value is not None else False
+        curr_alarm = self._is_alarm_like(current_value)
+        return curr_alarm and not prev_alarm
+
+    def _is_alarm_like(self, value: str | None) -> bool:
+        """Classify user-facing values that represent an alarm state."""
+        if value is None:
+            return False
+        lowered = value.lower()
+        if any(keyword in lowered for keyword in ALARM_KEYWORDS):
+            return True
+        return lowered in {"1", "2", "3", "4", "5"}
+
+    def _infer_event_severity(self, value_text: str) -> int:
+        """Map alarm-like strings into an event severity integer."""
+        lowered = value_text.lower()
+        if "critical" in lowered:
+            return 5
+        if "major" in lowered:
+            return 4
+        if "minor" in lowered:
+            return 3
+        if "alarm" in lowered or "fault" in lowered:
+            return 2
+        if lowered.isdigit():
+            return max(1, min(5, int(lowered)))
+        return 2
+
+    def _send_completion_trap(
+        self,
+        source: str,
+        code: int,
+        dest_host: str,
+        dest_port: int,
+    ) -> None:
+        self._send_trap_direct(
+            trap_oid="1.3.6.1.4.1.99998.0.2",
+            dest_host=dest_host,
+            dest_port=dest_port,
+            var_binds=[
+                ("1.3.6.1.4.1.99998.1.1.3", OctetString(source)),
+                ("1.3.6.1.4.1.99998.1.1.4", Integer(code)),
+            ],
+        )
+
+    def _send_event_trap(
+        self,
+        severity: int,
+        text: str,
+        dest_host: str,
+        dest_port: int,
+    ) -> None:
+        self._send_trap_direct(
+            trap_oid="1.3.6.1.4.1.99998.0.3",
+            dest_host=dest_host,
+            dest_port=dest_port,
+            var_binds=[
+                ("1.3.6.1.4.1.99998.1.1.5", Integer(severity)),
+                ("1.3.6.1.4.1.99998.1.1.6", OctetString(text)),
+            ],
+        )
+
+    def _send_regular_trap(self, dest_host: str, dest_port: int) -> None:
+        self._send_trap_direct(
+            trap_oid="1.3.6.1.6.3.1.1.5.1",
+            dest_host=dest_host,
+            dest_port=dest_port,
+            var_binds=[],
+        )
 
     def _send_trap_direct(
         self,

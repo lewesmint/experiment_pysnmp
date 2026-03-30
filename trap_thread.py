@@ -164,7 +164,7 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         whole_message: bytes,  # raw BER bytes from the socket
     ) -> None:
         """Decode an inbound UDP datagram and route it as a trap or a response."""
-        del _transport_dispatcher_param, _transport_domain, transport_address
+        # del _transport_dispatcher_param, _transport_domain, transport_address
         try:
             msg, _ = decoder.decode(whole_message, asn1Spec=_proto.Message())
         except (PyAsn1Error, TypeError, ValueError):

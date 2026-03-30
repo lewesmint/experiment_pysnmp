@@ -1,7 +1,7 @@
 """Minimal pysnmp hello-world style script."""
 
 import types
-from typing import Sequence
+from typing import Any, Sequence, cast
 
 from pyasn1.type.base import Asn1Type  # type: ignore[import-untyped]
 from pysnmp.hlapi.v3arch.asyncio import SnmpEngine  # type: ignore[import-untyped]
@@ -27,6 +27,16 @@ def resolve_oid(view: MibViewController,
     return view.get_node_name(oid)  # type: ignore[no-any-return]
 
 
+def asn1_pretty(value: Asn1Type) -> str:
+    """Return a stable string representation for pyasn1 values."""
+    pretty = getattr(value, "prettyPrint", None)
+    if callable(pretty):
+        # pyasn1 stubs currently type this as returning None, but at runtime it
+        # returns a printable value.
+        return str(cast(Any, pretty)())
+    return str(value)
+
+
 def main() -> None:
     """Run a local pysnmp smoke test without network access."""
     engine = SnmpEngine()
@@ -38,9 +48,9 @@ def main() -> None:
     oid, label, suffix = resolve_oid(view, sys_descr_oid)
     oid_value: Asn1Type = oid
     suffix_value: Asn1Type = suffix
-    print(f"OID:    {oid_value.prettyPrint()}")
+    print(f"OID:    {asn1_pretty(oid_value)}")
     print(f"Label:  {'.'.join(label)}")
-    print(f"Suffix: {suffix_value.prettyPrint()}")
+    print(f"Suffix: {asn1_pretty(suffix_value)}")
 
     proto_mod = api.v2c
     rx_pdu = proto_mod.GetResponsePDU()
@@ -55,7 +65,7 @@ def main() -> None:
     for varbind in varbinds:
         vb_oid: ObjectName = varbind[0]
         vb_val: Asn1Type = varbind[1]
-        print(f"VarBind: {vb_oid.prettyPrint()} = {vb_val.prettyPrint()}")
+        print(f"VarBind: {vb_oid.prettyPrint()} = {asn1_pretty(vb_val)}")
 
 
 if __name__ == "__main__":
