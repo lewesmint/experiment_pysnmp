@@ -1,0 +1,85 @@
+# Integration test script for snmp-sim + trap_thread manager harness
+# Usage:
+#   python manager_app.py --startup-listen --script integration_test.txt
+#
+# Requirements:
+#   - snmp-sim agent running:  python run_agent_with_rest.py
+#   - SNMP agent on 127.0.0.1:11161, REST API on 127.0.0.1:8800
+#   - Community strings: public (GET), private (SET)
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+
+# Clear any previously recorded SNMP operations from the agent debug log.
+clear-agent-log
+
+# Ensure trap receiver is running.
+listen
+
+# Create a manager targeting the sim agent.
+# Args: name ip dest_port send_port read_community write_community
+new mgr1 127.0.0.1 11161 162 public private
+open mgr1
+
+# Allow the OPEN handshake to settle.
+sleep 0.5
+
+# ---------------------------------------------------------------------------
+# Test 1: GET a well-known scalar (sysDescr.0)
+# ---------------------------------------------------------------------------
+
+# Confirm the GET round-trip succeeds and returns some content.
+assert-get mgr1 1.3.6.1.2.1.1.1.0 "" 3.0
+assert-result mgr1 RESULT_OK
+
+# Confirm the agent actually logged the GET request.
+assert-agent-saw get 1.3.6.1.2.1.1.1.0
+
+# ---------------------------------------------------------------------------
+# Test 2: SET a writable scalar (sysLocation.0) and verify the round-trip
+# ---------------------------------------------------------------------------
+
+clear-agent-log
+
+setstr mgr1 1.3.6.1.2.1.1.6.0 integration-test-room 2.0
+assert-result mgr1 RESULT_OK
+
+# Confirm the agent recorded the SET.
+assert-agent-saw set 1.3.6.1.2.1.1.6.0 integration-test-room
+
+# Read back the value we just wrote.
+assert-get mgr1 1.3.6.1.2.1.1.6.0 integration-test-room 3.0
+assert-result mgr1 RESULT_OK
+
+# ---------------------------------------------------------------------------
+# Test 3: Completion trap reception
+# ---------------------------------------------------------------------------
+
+cleartraps
+send-completion-trap CLI 200 127.0.0.1 162
+wait-trap completion 5.0
+
+# ---------------------------------------------------------------------------
+# Test 4: Event trap reception
+# ---------------------------------------------------------------------------
+
+cleartraps
+send-event-trap 4 "Power supply alarm" 127.0.0.1 162
+wait-trap event 5.0
+
+# ---------------------------------------------------------------------------
+# Test 5: Regular trap reception (classified as value-change trap)
+# ---------------------------------------------------------------------------
+
+cleartraps
+send-regular-trap 127.0.0.1 162
+wait-trap value-change 5.0
+
+# ---------------------------------------------------------------------------
+# Teardown
+# ---------------------------------------------------------------------------
+
+close mgr1
+stoplisten
+quit

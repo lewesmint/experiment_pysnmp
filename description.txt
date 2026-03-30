@@ -1,0 +1,92 @@
+The class is called TrapThrerad
+this is defined in a file called trap_thread.py
+at the botom of the file a single instance of TrapThread is instantiated called the_trap_thread
+
+This is exported and utilised by other classes.
+
+everything is basically done in a Function valled trap_thread_main
+
+but there are also methods cb_trap_received, cb_timer, start_trap_receiver, stop_trap_receiver, busy, close, __init__, clear_trap_list, 
+
+Some types are defined
+
+CompletionTrap = tuple[int, Asn1Item, Asn1Item]
+EventTrap =tuple[int, Asn1Item, Asn1Item]
+ValueChangeTrap = tuple[int, Asn1Item, Asn1Item]
+
+Trap = CompletionTrap | EventTrap | ValueChangeTrap
+
+it as a mailbox attribute which is a Queue and items are added to the queue from manager objects(class SNMPManager), mutexted aid synchronization
+
+There are events that are set or cleared for completion_trap_event, evenr_trap_event and value_change_trap_event and thread_changed_event
+
+a list of managers is maintained using manager_list
+
+results are updated on a manager by setting mgr.result_code, mg_var_bind_sequence
+
+managers also have a completion_event set by the trap thread
+
+we import Message from pysnmp.proto.api.v2c
+
+-- SNMPManager
+def __init__( self, destination_ip_address: str="127.0.0.1", destination_port: int=161, send_port: int=0) -> None:
+
+TrapThread
+def __init__(self) -> None:
+def close(self) -> None:
+def clear_trap_lisr(self) -> None:
+def start_trap_receiver(self) -> None:
+def stop_trap_receiver(self) -> None:
+def cb_timer(self, time_now: float) -> None:
+def cb_trap_received(
+    self,
+    _transport_dispatcher_param: object,
+    _transport_domain: object
+    transport_address: tuple[object,object],
+    whole_message: Message,
+) -> None:
+
+these are not using in this function
+#    _transport_dispatcher_param: object,
+#    _transport_domain: object
+
+def trap_thread_main(self) - None:
+
+def busy(self) ->bool:
+
+--
+
+the first in int the trap tuples identifies the types
+COMPLETION_TRAP= 0
+VALUE_CHANGE_TRAP=1
+EVET_TRAP=2
+
+Results are Intergers from 
+from pysyn1.type.univ import Interget, Null 
+
+RESULTOK=Integer(0)
+RESULTTIMEOUT=Integer(1)
+RESULTNOTSENT=Integer(2)
+
+Mailbox message types
+
+MAILBOXOPEN = 0
+MAILBOXCLOSE = 1
+MAILBOXGET = 2
+MAILBOXSET = 3
+
+the managers just put themselves on the mailbox queue, community string is public trap is configurable via the send port argument of the SNMPManager
+
+completiontrap and eventtrap are traps types defined in the mib.
+
+the manager holds the trap port so the trap thread sees it as mgr.sned_port when iterating through the managers as mgr.
+
+the quuee item is the manager itself the varbinds to be get set are held as mgr.var_bind_sequence which should be a list
+
+set the manager has a value msg_type which is set accordingly before the manager is put on the queue
+
+
+
+
+
+

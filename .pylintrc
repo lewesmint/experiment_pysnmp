@@ -1,0 +1,5 @@
+[MASTER]
+ignore-paths=
+    ^\.venv/.*$
+    ^TEST-ENUM-MIB\.py$
+    ^__pycache__/.*$

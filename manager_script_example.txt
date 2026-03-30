@@ -1,0 +1,27 @@
+# Manager app script example
+# Use with: python manager_app.py --startup-listen --script manager_script_example.txt
+
+listen
+new mgr1 127.0.0.1 11161 162
+open mgr1
+
+# Wait for external system setup
+sleep 1.0
+
+# GET an OID
+get mgr1 1.3.6.1.2.1.1.1.0 2.0
+
+# SET integer and string OIDs
+setint mgr1 1.3.6.1.2.1.1.7.0 2 2.0
+setstr mgr1 1.3.6.1.2.1.1.5.0 lab-switch 2.0
+
+status mgr1
+list
+
+# Allow time for incoming traps from external generator
+sleep 30.0
+
+cleartraps
+close mgr1
+stoplisten
+quit
