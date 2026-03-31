@@ -40,8 +40,8 @@ EVENT_TRAP: int = 2
 # Result codes  (pyasn1 Integer values, matching legacy RESULT_OK etc.)
 # ---------------------------------------------------------------------------
 RESULT_OK = Integer(0)
-RESULT_TIMEOUT = Integer(1)
-RESULT_NOT_SENT = Integer(2)
+RESULT_TIMEOUT = Integer(-1)
+RESULT_NOT_SENT = Integer(-2)
 
 # ---------------------------------------------------------------------------
 # Mailbox command codes
@@ -101,11 +101,14 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         self._trap_listening = False
         self._trap_socket: socket.socket | None = None
         self._trap_bind_error: OSError | None = None
+        self._trap_bind_host: str = TRAP_BIND_HOST
+        self._trap_bind_port: int = DEFAULT_TRAP_PORT
+        self._trap_state_change_pending = False
 
         self._worker_thread = threading.Thread(
             target=self.trap_thread_main,
             name="TrapThread",
-            daemon=True,
+            daemon=False,
         )
         self._worker_thread.start()
 
@@ -116,8 +119,12 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
     def close(self) -> None:
         """Stop the worker thread and release all resources."""
         self._running = False
+        self._trap_listening = False
         if self._worker_thread.is_alive():
-            self._worker_thread.join(timeout=2.0)
+            self._worker_thread.join()
+        if self._trap_socket is not None:
+            self._trap_socket.close()
+            self._trap_socket = None
 
     def clear_trap_list(self) -> None:
         """Discard all queued traps and clear the associated events."""
@@ -127,15 +134,25 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         self.event_trap_event.clear()
         self.value_change_trap_event.clear()
 
-    def start_trap_receiver(self) -> None:
-        """Enable the UDP trap listener socket."""
+    def start_trap_receiver(
+        self,
+        source_ip_address: str = TRAP_BIND_HOST,
+        trap_listening_port: int = DEFAULT_TRAP_PORT,
+    ) -> None:
+        """Enable trap listener and wait for worker thread to apply state."""
+        self._trap_bind_host = source_ip_address
+        self._trap_bind_port = trap_listening_port
+        self._trap_state_change_pending = True
+        self.thread_changed_event.clear()
         self._trap_listening = True
-        self.thread_changed_event.set()
+        self.thread_changed_event.wait()
 
     def stop_trap_receiver(self) -> None:
-        """Disable and close the UDP trap listener socket."""
+        """Disable trap listener and wait for worker thread to apply state."""
+        self._trap_state_change_pending = True
+        self.thread_changed_event.clear()
         self._trap_listening = False
-        self.thread_changed_event.set()
+        self.thread_changed_event.wait()
 
     def busy(self) -> bool:
         """True when there is active work (trap listener open or request outstanding)."""
@@ -153,7 +170,9 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
             if mgr.request_id is not None and mgr.send_time > 0:
                 if time_now - mgr.send_time >= mgr.timeout:
                     mgr.result_code = RESULT_TIMEOUT
+                    mgr.var_bind_sequence = []
                     mgr.request_id = None
+                    mgr.send_time = 0.0
                     mgr.completion_event.set()
 
     def cb_trap_received(
@@ -179,12 +198,15 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
             req_id = int(_proto.apiPDU.get_request_id(pdu))
             for mgr in self.manager_list:
                 if mgr.request_id == req_id:
-                    if int(_proto.apiPDU.get_error_status(pdu)):
-                        mgr.result_code = RESULT_NOT_SENT
+                    error_status = _proto.apiPDU.get_error_status(pdu)
+                    if int(error_status):
+                        mgr.result_code = Integer(int(error_status))
+                        mgr.var_bind_sequence = []
                     else:
                         mgr.result_code = RESULT_OK
                         mgr.var_bind_sequence = list(_proto.apiPDU.get_varbinds(pdu))
                     mgr.request_id = None
+                    mgr.send_time = 0.0
                     mgr.completion_event.set()
                     break
 
@@ -197,19 +219,31 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         """
         vbs = list(_proto.apiPDU.get_varbinds(pdu))
 
+        trap_oid: Asn1Item = Null()
+        trap_oid_text = ""
+        if len(vbs) >= 2:
+            trap_oid = vbs[1][1]
+            trap_oid_text = str(vbs[1][1])
+
         trap_kind = VALUE_CHANGE_TRAP
         # SNMPv2 traps conventionally carry snmpTrapOID.0 as varbind index 1.
-        if len(vbs) >= 2:
-            trap_oid = str(vbs[1][1])
-            if trap_oid == COMPLETION_TRAP_OID:
-                trap_kind = COMPLETION_TRAP
-            elif trap_oid == EVENT_TRAP_OID:
-                trap_kind = EVENT_TRAP
+        if trap_oid_text == COMPLETION_TRAP_OID:
+            trap_kind = COMPLETION_TRAP
+        elif trap_oid_text == EVENT_TRAP_OID:
+            trap_kind = EVENT_TRAP
 
-        oid: Any = vbs[0][0] if vbs else Null()
-        val: Any = vbs[0][1] if vbs else Null()
+        if trap_kind == COMPLETION_TRAP:
+            first: Asn1Item = vbs[2][1] if len(vbs) >= 3 else Null()
+            second: Asn1Item = vbs[3][1] if len(vbs) >= 4 else Null()
+            trap: Trap = (COMPLETION_TRAP, first, second)
+        elif trap_kind == EVENT_TRAP:
+            first = vbs[2][1] if len(vbs) >= 3 else Null()
+            second = vbs[3][1] if len(vbs) >= 4 else Null()
+            trap = (EVENT_TRAP, first, second)
+        else:
+            trap_contents_vbl: Asn1Item = _proto.apiPDU.get_varbind_list(pdu)
+            trap = (VALUE_CHANGE_TRAP, trap_oid, trap_contents_vbl)
 
-        trap: Trap = (trap_kind, oid, val)
         with self._lock:
             self.trap_list.append(trap)
 
@@ -248,7 +282,14 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         mgr.request_id = req_id
         mgr.send_time = time.monotonic()
         if mgr.socket is not None:
-            mgr.socket.sendto(raw, (mgr.destination_ip_address, mgr.destination_port))
+            try:
+                mgr.socket.sendto(raw, (mgr.destination_ip_address, mgr.destination_port))
+            except OSError:
+                mgr.result_code = RESULT_NOT_SENT
+                mgr.var_bind_sequence = []
+                mgr.request_id = None
+                mgr.send_time = 0.0
+                mgr.completion_event.set()
 
     def _send_get(self, mgr: SNMPManager) -> None:
         pdu = _proto.GetRequestPDU()
@@ -270,16 +311,11 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         """
         if self._trap_socket is not None:
             return
-        port = DEFAULT_TRAP_PORT
-        for mgr in self.manager_list:
-            if mgr.send_port:
-                port = mgr.send_port
-                break
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setblocking(False)
         try:
-            sock.bind((TRAP_BIND_HOST, port))
+            sock.bind((self._trap_bind_host, self._trap_bind_port))
         except OSError as ex:
             sock.close()
             self._trap_bind_error = ex
@@ -312,11 +348,12 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         self._open_manager_socket(mgr)
         if mgr not in self.manager_list:
             self.manager_list.append(mgr)
+        mgr.result_code = RESULT_OK
+        mgr.completion_event.set()
         self.thread_changed_event.set()
 
     def _handle_mailbox_close(self, mgr: SNMPManager) -> None:
         self._close_manager_socket(mgr)
-        mgr.result_code = RESULT_NOT_SENT
         mgr.completion_event.set()
         self.thread_changed_event.set()
 
@@ -363,6 +400,10 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
             elif self._trap_socket is not None:
                 self._trap_socket.close()
                 self._trap_socket = None
+
+            if self._trap_state_change_pending:
+                self._trap_state_change_pending = False
+                self.thread_changed_event.set()
 
             # --- sleep when idle (no jobStarted / runDispatcher) --------
             if not self.busy():

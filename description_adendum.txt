@@ -1,0 +1,87 @@
+Another agent has reported this about the current replacement code. You should see hther it makes sense but don't automatically make changes for the sake of it is you improved the code, snd it does not affect the interface.
+
+To retain compatiability with the old code there's some changed needed for the trap_thread
+
+the result codes should use the Integer from univ and shouls be 0, -1, -2
+
+the old start_trap_receiver had a signature that too a string as the source_ip_address and a trap_listening_port
+I think we shifted this to the manager.... that might be a change we want to make later. Right now we need compatability with the old signature.
+The old methos saved the ip and port  an signalled the state change, then waited for the worker thread to complete the action
+
+trap bind port logic is wrong, as it gets the port from the manager, whearas the port i nthe old code was explcitylu supplied by start_trap_receiver
+
+trap decoding does not match old trap structure
+
+completion traps used  varbinds[2][1] and var_binds[3][1]
+event traps used varbinds[2][1] and var_binds[3][1]
+
+value changed traps stored VALUECHANGEDTRAP, trapOID, trapContentsVBL
+
+new _handle_trap used trap = trap_kind, oid, valled
+where oid and val are just from vbsp[0]
+It says this si not compatible
+
+timeout path should clear return varbinds
+old code did 
+mgr.result-code = RESULTTIMEOUT
+mgr.var_binds_list = []
+mgr.send_time = 0.0
+mgr.completion_event.set()
+
+get error handling is different
+
+old code on receied repsonse with SNMP error status set mgr.result_code = errorStatus, and mgr.var_bind_list = []
+this code does RESULT_NOT_SENT. :In our OLD code this means local send failure, not SNMP error repsonse
+
+close mailbo semantics is different
+OLD code on MAILBOXCLOSE
+mgr.completionEvent.set()
+
+new code does RESULT_NOT_SENT
+
+Open mailbox semantics different
+OLD code :}
+set mgr.result_code = RESULLTOK
+set completion event
+
+new code opens socketappends manager, sets thread change event but does not signal manager's completion even or result codee, this will break waiting on completion
+
+no waiting handshake for trap listener start/stop_trap_receiver
+old code did:
+self.trap_listener_running=True 
+self.thread_changed_event.Clear()
+self.thread_chsnged_event.Wait()
+
+Thread shutdown is weaker than old code.
+
+oold code joined fully, then closed dispatcher resources
+
+new code does self._running = False
+join(timeout-2.0)
+
+this can leave the thred alive and resourcs open
+it is noted the that it's now a daemon so shutdown semantices have changed, not neccesailry bad, but not identical
+
+Note in the old manager code self.send_time is set with:
+
+self.send_time = (0.0)
+
+The other agent doesn't know this, but it asks whther there's a wall clock time mismatch
+
+The old code looped
+
+while wholeMsg:
+    rxMsg, wholeMsg = decoder.decode( ... )
+
+
+The agent notes that usually UDP only crries on message, so this is probably finished
+New code does:
+
+ if isinstance(pdu, _proto.SNMPv2TrapPDU)
+
+ The agent saius this is probably fine, but FYI the olf code used rxPDU.isStameTypeWith (is_sam_type_with ... maybe?)
+
+ 
+
+
+

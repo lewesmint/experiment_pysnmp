@@ -11,7 +11,7 @@ from pyasn1.type.univ import Integer  # type: ignore[import-untyped]
 
 DEFAULT_TIMEOUT: float = 2.0
 DEFAULT_MSG_TYPE: int = 0
-DEFAULT_RESULT_NOT_SENT = Integer(2)
+DEFAULT_RESULT_NOT_SENT = Integer(-2)
 DEFAULT_READ_COMMUNITY: bytes = b"public"
 DEFAULT_WRITE_COMMUNITY: bytes = b"public"
 
