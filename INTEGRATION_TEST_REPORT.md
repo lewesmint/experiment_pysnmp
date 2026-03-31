@@ -45,15 +45,12 @@ This report explains how the end-to-end integration harness works for:
 
 ### Test 3: Completion trap
 - `cleartraps`
-- `setstr mgr1 1.3.6.1.2.1.1.6.0 model-normal 2.0`
-- `assert-result mgr1 RESULT_OK`
+- `send-completion-trap CLI 200 127.0.0.1 162`
 - `wait-trap completion 5.0`
 
 ### Test 4: Event trap
 - `cleartraps`
-- `setstr mgr1 1.3.6.1.2.1.1.6.0 alarm-major 2.0`
-- `assert-result mgr1 RESULT_OK`
-- `wait-trap completion 5.0`
+- `send-event-trap 4 "Power supply alarm" 127.0.0.1 162`
 - `wait-trap event 5.0`
 
 ### Test 5: Regular trap
@@ -73,9 +70,15 @@ Trap kind is determined in `trap_thread.py` using trap OID:
 - Any other trap OID -> classified as value-change trap
 
 ## Behavior Model Ownership
-Trap generation for completion/event is now in the simulator agent runtime:
-- On successful SNMP SET commit, the agent emits a completion trap.
-- If the SET transitions a value from non-alarm to alarm-like state, the agent emits an event trap.
+Trap generation for completion/event is now provided via the simulator behavior plugin interface:
+- Runtime hook: SNMP SET transitions are observed in the agent instrumentation boundary.
+- Plugin owner: `plugins/enum_mib_behaviour.py` emits trap directives only for `TEST-ENUM-MIB`.
+- Rules in plugin:
+  - On successful `TEST-ENUM-MIB` SET transition, emit completion trap.
+  - If transition enters alarm-like state, emit event trap.
+
+Current integration script validates trap reception/classification using explicit trap-send commands.
+It does not yet drive a writable `TEST-ENUM-MIB` transition path end-to-end.
 
 The manager harness no longer auto-emits modeled completion/event traps after SET, so integration results reflect true agent behavior.
 

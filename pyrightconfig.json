@@ -8,6 +8,8 @@
     "**/__pycache__",
     ".venv",
     "retired",
-    "TEST-ENUM-MIB.py"
+    "TEST-ENUM-MIB.py",
+    "**/TEST-ENUM-MIB.py",
+    "**/test-enum-mib.py"
   ]
 }

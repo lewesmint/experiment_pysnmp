@@ -16,7 +16,7 @@ DEFAULT_READ_COMMUNITY: bytes = b"public"
 DEFAULT_WRITE_COMMUNITY: bytes = b"public"
 
 
-class SNMPManager:  # pylint: disable=too-many-instance-attributes,too-few-public-methods
+class SNMPManager:  # pylint: disable=too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-positional-arguments
     """Represents a single SNMP peer and request state."""
 
     def __init__(

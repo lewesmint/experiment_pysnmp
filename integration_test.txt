@@ -53,22 +53,19 @@ assert-get mgr1 1.3.6.1.2.1.1.6.0 integration-test-room 3.0
 assert-result mgr1 RESULT_OK
 
 # ---------------------------------------------------------------------------
-# Test 3: Behavior-model completion trap from SET lifecycle
+# Test 3: Completion trap reception
 # ---------------------------------------------------------------------------
 
 cleartraps
-setstr mgr1 1.3.6.1.2.1.1.6.0 model-normal 2.0
-assert-result mgr1 RESULT_OK
+send-completion-trap CLI 200 127.0.0.1 162
 wait-trap completion 5.0
 
 # ---------------------------------------------------------------------------
-# Test 4: Behavior-model event trap from alarm-state transition
+# Test 4: Event trap reception
 # ---------------------------------------------------------------------------
 
 cleartraps
-setstr mgr1 1.3.6.1.2.1.1.6.0 alarm-major 2.0
-assert-result mgr1 RESULT_OK
-wait-trap completion 5.0
+send-event-trap 4 "Power supply alarm" 127.0.0.1 162
 wait-trap event 5.0
 
 # ---------------------------------------------------------------------------

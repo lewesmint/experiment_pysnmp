@@ -73,6 +73,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Run the simulator process and manager script as a single E2E flow."""
     args = _parse_args()
 
     if not SNMP_SIM_PYTHON.exists():
@@ -83,42 +84,47 @@ def main() -> None:
         sys.exit(1)
 
     print(f"Starting snmp-sim agent from {SNMP_SIM_DIR} ...")
-    agent_proc = subprocess.Popen(
+    result_code = 1
+    with subprocess.Popen(
         [str(SNMP_SIM_PYTHON), str(SNMP_SIM_ENTRY)],
         cwd=str(SNMP_SIM_DIR),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-    )
-
-    try:
-        print(f"Waiting up to {AGENT_READY_TIMEOUT}s for agent on "
-              f"REST:{REST_PORT} / SNMP:{SNMP_PORT} ...")
-        if not _wait_for_agent(AGENT_READY_TIMEOUT):
-            print("ERROR: agent did not become reachable in time")
-            agent_proc.terminate()
-            sys.exit(1)
-        print("Agent is ready.\n")
-
-        manager_python = Path(sys.executable)
-        manager_script = Path(__file__).parent / "manager_app.py"
-        cmd = [
-            str(manager_python),
-            str(manager_script),
-            "--startup-listen",
-            "--script", args.script,
-            "--agent-url", args.agent_url,
-        ]
-        result = subprocess.run(cmd, cwd=str(Path(__file__).parent))
-
-    finally:
-        print("\nStopping snmp-sim agent ...")
-        agent_proc.send_signal(signal.SIGINT)
+    ) as agent_proc:
         try:
-            agent_proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            agent_proc.kill()
+            print(f"Waiting up to {AGENT_READY_TIMEOUT}s for agent on "
+                  f"REST:{REST_PORT} / SNMP:{SNMP_PORT} ...")
+            if not _wait_for_agent(AGENT_READY_TIMEOUT):
+                print("ERROR: agent did not become reachable in time")
+                agent_proc.terminate()
+                sys.exit(1)
+            print("Agent is ready.\n")
 
-    sys.exit(result.returncode)
+            manager_python = Path(sys.executable)
+            manager_script = Path(__file__).parent / "manager_app.py"
+            cmd = [
+                str(manager_python),
+                str(manager_script),
+                "--startup-listen",
+                "--script", args.script,
+                "--agent-url", args.agent_url,
+            ]
+            result = subprocess.run(
+                cmd,
+                cwd=str(Path(__file__).parent),
+                check=False,
+            )
+            result_code = result.returncode
+
+        finally:
+            print("\nStopping snmp-sim agent ...")
+            agent_proc.send_signal(signal.SIGINT)
+            try:
+                agent_proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                agent_proc.kill()
+
+    sys.exit(result_code)
 
 
 if __name__ == "__main__":
