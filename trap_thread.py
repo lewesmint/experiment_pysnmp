@@ -255,17 +255,17 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
             self.event_trap_event.set()
 
     def _open_manager_socket(self, mgr: SNMPManager) -> None:
-        if mgr.socket is None:
+        if mgr.socket_transport is None:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setblocking(False)
             # Manager request/reply socket should remain ephemeral.
             sock.bind(("0.0.0.0", 0))
-            mgr.socket = sock
+            mgr.socket_transport = sock
 
     def _close_manager_socket(self, mgr: SNMPManager) -> None:
-        if mgr.socket is not None:
-            mgr.socket.close()
-            mgr.socket = None
+        if mgr.socket_transport is not None:
+            mgr.socket_transport.close()
+            mgr.socket_transport = None
         mgr.request_id = None
         if mgr in self.manager_list:
             self.manager_list.remove(mgr)
@@ -281,9 +281,9 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         req_id = int(_proto.apiPDU.get_request_id(pdu))
         mgr.request_id = req_id
         mgr.send_time = time.monotonic()
-        if mgr.socket is not None:
+        if mgr.socket_transport is not None:
             try:
-                mgr.socket.sendto(raw, (mgr.destination_ip_address, mgr.destination_port))
+                mgr.socket_transport.sendto(raw, (mgr.destination_ip_address, mgr.destination_port))
             except OSError:
                 mgr.result_code = RESULT_NOT_SENT
                 mgr.var_bind_sequence = []
@@ -329,8 +329,8 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         if self._trap_socket is not None:
             socks.append(self._trap_socket)
         for mgr in self.manager_list:
-            if mgr.socket is not None and mgr.request_id is not None:
-                socks.append(mgr.socket)
+            if mgr.socket_transport is not None and mgr.request_id is not None:
+                socks.append(mgr.socket_transport)
         return socks
 
     def _process_mailbox_command(self, mgr: SNMPManager) -> None:
@@ -358,14 +358,14 @@ class TrapThread:  # pylint: disable=too-many-instance-attributes
         self.thread_changed_event.set()
 
     def _handle_mailbox_get(self, mgr: SNMPManager) -> None:
-        if mgr.socket is None:
+        if mgr.socket_transport is None:
             self._open_manager_socket(mgr)
         if mgr not in self.manager_list:
             self.manager_list.append(mgr)
         self._send_get(mgr)
 
     def _handle_mailbox_set(self, mgr: SNMPManager) -> None:
-        if mgr.socket is None:
+        if mgr.socket_transport is None:
             self._open_manager_socket(mgr)
         if mgr not in self.manager_list:
             self.manager_list.append(mgr)

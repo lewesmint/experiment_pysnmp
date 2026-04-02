@@ -83,5 +83,6 @@ New code does:
 
  
 
-
-
+I made a mistake in the original description. The manager holds self.socket_transport which was assigned in the trap thread. The manager does not create its own socket or use it, or the transport directly. 
+The socket_transport was assigned in the main thread and referrd to for socketTrasportClose.
+Now we assign a socket to the mgr. Dow we need to do that? at all? Do we need the socket, or the transport in the code?

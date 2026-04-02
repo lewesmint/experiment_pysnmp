@@ -45,4 +45,4 @@ class SNMPManager:  # pylint: disable=too-many-instance-attributes,too-few-publi
         self.request_id: int | None = None
         self.send_time: float = 0.0
         self.timeout: float = DEFAULT_TIMEOUT
-        self.socket: socket.socket | None = None
+        self.socket_transport: socket.socket | None = None
