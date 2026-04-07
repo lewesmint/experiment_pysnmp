@@ -1,0 +1,108 @@
+FOOBAR-MANAGER-REGISTRATION-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY,
+    OBJECT-TYPE,
+    enterprises,
+    Integer32,
+    IpAddress
+        FROM SNMPv2-SMI
+    MODULE-COMPLIANCE,
+    OBJECT-GROUP
+        FROM SNMPv2-CONF
+    RowStatus
+        FROM SNMPv2-TC;
+
+foobarManagerRegistrationMib MODULE-IDENTITY
+    LAST-UPDATED "202604070000Z"
+    ORGANIZATION "snmp-sim test fixtures"
+    CONTACT-INFO "n/a"
+    DESCRIPTION
+        "Fake MIB used to test manager registration RowStatus behavior."
+    ::= { enterprises 8998 }
+
+fooBar OBJECT IDENTIFIER ::= { foobarManagerRegistrationMib 321654 }
+
+recordedIpPort OBJECT IDENTIFIER ::= { fooBar 1 }
+
+recordedIpPortTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF RecordedIpPortEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Table for setting the UDP port for value change and completion traps."
+    ::= { recordedIpPort 1 }
+
+recordedIpPortEntry OBJECT-TYPE
+    SYNTAX      RecordedIpPortEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "A recorded IP/port row indexed by manager IP and manager send port."
+    INDEX       { managerIpAddress, managerSendPort }
+    ::= { recordedIpPortTable 1 }
+
+RecordedIpPortEntry ::= SEQUENCE {
+    managerIpAddress    IpAddress,
+    managerSendPort     Integer32,
+    managerTrapPort     Integer32,
+    managerRowStatus    RowStatus
+}
+
+managerIpAddress OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Manager IP address used as part of the row index."
+    ::= { recordedIpPortEntry 1 }
+
+managerSendPort OBJECT-TYPE
+    SYNTAX      Integer32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Manager source UDP port used as part of the row index."
+    ::= { recordedIpPortEntry 2 }
+
+managerTrapPort OBJECT-TYPE
+    SYNTAX      Integer32 (1..65535)
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "UDP port where the manager expects completion/value-change traps."
+    DEFVAL      { 162 }
+    ::= { recordedIpPortEntry 3 }
+
+managerRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Row status for recordedIpPortTable entries.
+         Supported set values are createAndGo(4) and destroy(6).
+         Reads return active(1) when a row exists."
+    DEFVAL      { notInService }
+    ::= { recordedIpPortEntry 4 }
+
+-- Optional conformance stubs for completeness
+
+recordedIpPortCompliances OBJECT IDENTIFIER ::= { fooBar 2 }
+recordedIpPortGroups      OBJECT IDENTIFIER ::= { fooBar 3 }
+
+recordedIpPortGroup OBJECT-GROUP
+    OBJECTS { managerTrapPort, managerRowStatus }
+    STATUS  current
+    DESCRIPTION
+        "Objects for recorded IP/port row lifecycle and trap destination."
+    ::= { recordedIpPortGroups 1 }
+
+recordedIpPortCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "Compliance statement for FOOBAR-MANAGER-REGISTRATION-MIB."
+    MODULE
+        MANDATORY-GROUPS { recordedIpPortGroup }
+    ::= { recordedIpPortCompliances 1 }
+
+END

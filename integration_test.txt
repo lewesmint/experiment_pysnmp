@@ -77,6 +77,19 @@ send-regular-trap 127.0.0.1 162
 wait-trap value-change 5.0
 
 # ---------------------------------------------------------------------------
+# Test 6: FOOBAR recordedIpPort RowStatus createAndGo (ip+port index)
+# ---------------------------------------------------------------------------
+
+# managerRowStatus.<managerIpAddress>.<managerSendPort>
+# = .1.3.6.1.4.1.8998.321654.1.1.1.4.127.0.0.1.2000
+# Diagnostic-only for now: this path currently returns wrongValue in snmp-sim,
+# but we still exercise the manager SET path and verify the agent saw it.
+clear-agent-log
+setint mgr1 1.3.6.1.4.1.8998.321654.1.1.1.4.127.0.0.1.2000 4 3.0
+status mgr1
+assert-agent-saw set 1.3.6.1.4.1.8998.321654.1.1.1.4.127.0.0.1.2000
+
+# ---------------------------------------------------------------------------
 # Teardown
 # ---------------------------------------------------------------------------
 
