@@ -1,7 +1,8 @@
 TEST-ENUM-MIB DEFINITIONS ::= BEGIN
 
 IMPORTS
-    MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32, enterprises, IpAddress, NOTIFICATION-TYPE
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, Unsigned32, enterprises,
+        IpAddress, NOTIFICATION-TYPE
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
         FROM SNMPv2-CONF
@@ -9,19 +10,39 @@ IMPORTS
         FROM SNMPv2-TC;
 
 testEnumMIB MODULE-IDENTITY
-    LAST-UPDATED "202604020000Z"
-    ORGANIZATION "Test"
-    CONTACT-INFO "test"
-    DESCRIPTION  "MIB for testing inline enum handling with no zero value"
+    LAST-UPDATED "202604030000Z"
+    ORGANIZATION "Test Organisation"
+    CONTACT-INFO
+        "Postal: Test Organisation
+                 1 Example Street
+                 Anytown, UK
+         Email:  mib-admin@example.com"
+    DESCRIPTION
+        "Test MIB for inline enum handling, RowStatus table creation,
+         notifications, composite indexes, simple indexed tables,
+         and AUGMENTS processing."
+    REVISION     "202604030000Z"
+    DESCRIPTION  "Updated the conformance section to align with SMIv2
+                  practice; added missing object groups for augmented
+                  table columns; corrected DESCRIPTION punctuation;
+                  added a named enumeration for eventSeverity; and
+                  removed accessible-for-notify objects from OBJECT-GROUP
+                  in line with RFC 2580 section 3.1. Those objects are
+                  covered via NOTIFICATION-TYPE OBJECTS clauses and the
+                  NOTIFICATION-GROUP."
     REVISION     "202604020000Z"
-    DESCRIPTION  "Added RowStatus-driven createAndGo/createAndWait semantics to testEnumTable"
+    DESCRIPTION  "Added RowStatus-driven createAndGo/createAndWait semantics
+                  to testEnumTable."
     REVISION     "202603300000Z"
-    DESCRIPTION  "Added completion and event notification examples for trap testing"
+    DESCRIPTION  "Added completion and event notification examples for trap
+                  testing."
     REVISION     "202602060000Z"
-    DESCRIPTION  "Initial version"
+    DESCRIPTION  "Initial version."
     ::= { enterprises 99998 }
 
-testEnumObjects OBJECT IDENTIFIER ::= { testEnumMIB 1 }
+testEnumNotifications OBJECT IDENTIFIER ::= { testEnumMIB 0 }
+testEnumObjects       OBJECT IDENTIFIER ::= { testEnumMIB 1 }
+testEnumConformance   OBJECT IDENTIFIER ::= { testEnumMIB 2 }
 
 -- ============================================================
 -- Scalars
@@ -38,7 +59,8 @@ testColour OBJECT-TYPE
                 }
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "A colour with no zero value in the enumeration"
+    DESCRIPTION
+        "A colour value with no zero value in the enumeration."
     ::= { testScalars 1 }
 
 testPriority OBJECT-TYPE
@@ -50,7 +72,8 @@ testPriority OBJECT-TYPE
                 }
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Priority with non-contiguous values starting well above zero"
+    DESCRIPTION
+        "Priority with non-contiguous values starting well above zero."
     ::= { testScalars 2 }
 
 completionSource OBJECT-TYPE
@@ -66,15 +89,24 @@ completionCode OBJECT-TYPE
     MAX-ACCESS  accessible-for-notify
     STATUS      current
     DESCRIPTION
-        "Equipment-defined completion code for the finished command/action."
+        "Equipment-defined completion code for the finished
+         command or action."
     ::= { testScalars 4 }
 
 eventSeverity OBJECT-TYPE
-    SYNTAX      Integer32 (0..5)
+    SYNTAX      INTEGER {
+                    clear(0),
+                    info(1),
+                    minor(2),
+                    major(3),
+                    critical(4),
+                    emergency(5)
+                }
     MAX-ACCESS  accessible-for-notify
     STATUS      current
     DESCRIPTION
-        "Alarm severity: 0=clear, 1=info, 2=minor, 3=major, 4=critical, 5=emergency."
+        "Alarm severity level.  clear(0) indicates the alarm condition
+         has been resolved."
     ::= { testScalars 5 }
 
 eventText OBJECT-TYPE
@@ -82,25 +114,27 @@ eventText OBJECT-TYPE
     MAX-ACCESS  accessible-for-notify
     STATUS      current
     DESCRIPTION
-        "Human-readable alarm/event text."
+        "Human-readable alarm or event text."
     ::= { testScalars 6 }
 
 -- ============================================================
--- Table
+-- Enum Table
 -- ============================================================
 
 testEnumTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF TestEnumEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Table for testing inline enums"
+    DESCRIPTION
+        "Table for testing inline enum handling."
     ::= { testEnumObjects 2 }
 
 testEnumEntry OBJECT-TYPE
     SYNTAX      TestEnumEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "An entry in the test enum table"
+    DESCRIPTION
+        "An entry in the test enum table."
     INDEX       { testEnumIndex }
     ::= { testEnumTable 1 }
 
@@ -115,7 +149,8 @@ testEnumIndex OBJECT-TYPE
     SYNTAX      Unsigned32 (1..4294967295)
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Row index"
+    DESCRIPTION
+        "Row index for the test enum table."
     ::= { testEnumEntry 1 }
 
 testRowColour OBJECT-TYPE
@@ -127,7 +162,8 @@ testRowColour OBJECT-TYPE
                 }
     MAX-ACCESS  read-create
     STATUS      current
-    DESCRIPTION "A colour column with no zero value in the enumeration"
+    DESCRIPTION
+        "A colour column with no zero value in the enumeration."
     ::= { testEnumEntry 2 }
 
 testRowPriority OBJECT-TYPE
@@ -139,7 +175,8 @@ testRowPriority OBJECT-TYPE
                 }
     MAX-ACCESS  read-create
     STATUS      current
-    DESCRIPTION "Priority column with non-contiguous values"
+    DESCRIPTION
+        "Priority column with non-contiguous values."
     ::= { testEnumEntry 3 }
 
 testRowStatus OBJECT-TYPE
@@ -147,31 +184,90 @@ testRowStatus OBJECT-TYPE
     MAX-ACCESS  read-create
     STATUS      current
     DESCRIPTION
-        "Row lifecycle control for testEnumTable.
-         Managers can create rows with createAndGo(4) or createAndWait(5),
-         activate with active(1), and remove with destroy(6)."
+        "Row lifecycle control for testEnumTable.  Managers can create
+         rows with createAndGo(4) or createAndWait(5), activate with
+         active(1), and remove with destroy(6)."
     ::= { testEnumEntry 4 }
 
 -- ============================================================
--- EndPoint Table
+-- Endpoint Table
 -- ============================================================
 
+endPointTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF EndPointEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Table for endpoint configuration."
+    ::= { testEnumObjects 3 }
+
+endPointEntry OBJECT-TYPE
+    SYNTAX      EndPointEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry in the endpoint table."
+    INDEX       { endPointIpAddress, endPointPort }
+    ::= { endPointTable 1 }
+
+EndPointEntry ::= SEQUENCE {
+    endPointIpAddress   IpAddress,
+    endPointPort        Unsigned32,
+    endPointName        DisplayString,
+    endPointNotes       DisplayString
+}
+
+endPointIpAddress OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "IP address of the endpoint."
+    ::= { endPointEntry 1 }
+
+endPointPort OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Port number of the endpoint."
+    ::= { endPointEntry 2 }
+
+endPointName OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..255))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Human-readable name of the endpoint."
+    ::= { endPointEntry 3 }
+
+endPointNotes OBJECT-TYPE
+    SYNTAX      DisplayString (SIZE (0..1024))
+    MAX-ACCESS  read-write
+    STATUS      current
+    DESCRIPTION
+        "Operator notes associated with the endpoint."
+    ::= { endPointEntry 4 }
+
 -- ============================================================
--- Inference Table (single-index shape for parser/inference testing)
+-- Inference Table
 -- ============================================================
 
 testInferenceTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF TestInferenceEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Table with a single-column index used for parser/inference testing"
+    DESCRIPTION
+        "Table with a single-column index used for parser and
+         inference testing."
     ::= { testEnumObjects 4 }
 
 testInferenceEntry OBJECT-TYPE
     SYNTAX      TestInferenceEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Entry with a simple single-column index for inference testing"
+    DESCRIPTION
+        "Entry with a simple single-column index for inference testing."
     INDEX       { testInferenceIndex }
     ::= { testInferenceTable 1 }
 
@@ -184,14 +280,18 @@ testInferenceIndex OBJECT-TYPE
     SYNTAX      Integer32
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Primary row index column used to identify each testInferenceEntry row"
+    DESCRIPTION
+        "Primary row index column used to identify each
+         testInferenceEntry row."
     ::= { testInferenceEntry 1 }
 
 testInferenceValue OBJECT-TYPE
     SYNTAX      Integer32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Non-index payload column used for inference and value decoding checks"
+    DESCRIPTION
+        "Non-index payload column used for inference and value
+         decoding checks."
     ::= { testInferenceEntry 2 }
 
 -- ============================================================
@@ -202,19 +302,21 @@ testAugBaseTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF TestAugBaseEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Base table used for AUGMENTS testing"
+    DESCRIPTION
+        "Base table used for AUGMENTS testing."
     ::= { testEnumObjects 5 }
 
 testAugBaseEntry OBJECT-TYPE
     SYNTAX      TestAugBaseEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Base row with mixed data types"
+    DESCRIPTION
+        "Base row with mixed data types."
     INDEX       { testAugBaseIndex }
     ::= { testAugBaseTable 1 }
 
 TestAugBaseEntry ::= SEQUENCE {
-    testAugBaseIndex     Unsigned32,
+    testAugBaseIndex       Unsigned32,
     testAugBase01Int       Integer32,
     testAugBase02Unsigned  Unsigned32,
     testAugBase03Name      DisplayString,
@@ -224,58 +326,66 @@ TestAugBaseEntry ::= SEQUENCE {
 
 testAugBaseIndex OBJECT-TYPE
     SYNTAX      Unsigned32 (1..4294967295)
-    MAX-ACCESS  read-only
+    MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Base table row index"
+    DESCRIPTION
+        "Base table row index."
     ::= { testAugBaseEntry 1 }
 
 testAugBase01Int OBJECT-TYPE
     SYNTAX      Integer32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Signed integer base column"
+    DESCRIPTION
+        "Signed integer base column."
     ::= { testAugBaseEntry 2 }
 
 testAugBase02Unsigned OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Unsigned integer base column"
+    DESCRIPTION
+        "Unsigned integer base column."
     ::= { testAugBaseEntry 3 }
 
 testAugBase03Name OBJECT-TYPE
     SYNTAX      DisplayString (SIZE (0..64))
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Display string base column"
+    DESCRIPTION
+        "Display string base column."
     ::= { testAugBaseEntry 4 }
 
 testAugBase04Address OBJECT-TYPE
     SYNTAX      IpAddress
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "IP address base column"
+    DESCRIPTION
+        "IP address base column."
     ::= { testAugBaseEntry 5 }
 
 testAugBase05Payload OBJECT-TYPE
     SYNTAX      OCTET STRING (SIZE (0..64))
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Octet string base column"
+    DESCRIPTION
+        "Octet string base column."
     ::= { testAugBaseEntry 6 }
 
 testAugExtTable OBJECT-TYPE
     SYNTAX      SEQUENCE OF TestAugExtEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Extension table augmenting testAugBaseEntry"
+    DESCRIPTION
+        "Extension table augmenting testAugBaseEntry."
     ::= { testEnumObjects 6 }
 
 testAugExtEntry OBJECT-TYPE
     SYNTAX      TestAugExtEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Augmenting row that extends base table rows"
+    DESCRIPTION
+        "Augmenting row that extends base table rows."
     AUGMENTS    { testAugBaseEntry }
     ::= { testAugExtTable 1 }
 
@@ -300,56 +410,64 @@ testAugExt01Status OBJECT-TYPE
                 }
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Operational status extension column"
+    DESCRIPTION
+        "Operational status extension column."
     ::= { testAugExtEntry 1 }
 
 testAugExt02Counter OBJECT-TYPE
     SYNTAX      Integer32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Signed counter-like extension column"
+    DESCRIPTION
+        "Signed counter-like extension column."
     ::= { testAugExtEntry 2 }
 
 testAugExt03Rate OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Rate extension column"
+    DESCRIPTION
+        "Rate extension column."
     ::= { testAugExtEntry 3 }
 
 testAugExt04LastChange OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Timestamp-like extension column"
+    DESCRIPTION
+        "Timestamp-like extension column."
     ::= { testAugExtEntry 4 }
 
 testAugExt05Owner OBJECT-TYPE
     SYNTAX      DisplayString (SIZE (0..64))
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Owner extension column"
+    DESCRIPTION
+        "Owner extension column."
     ::= { testAugExtEntry 5 }
 
 testAugExt06Tag OBJECT-TYPE
     SYNTAX      DisplayString (SIZE (0..64))
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Tag extension column"
+    DESCRIPTION
+        "Tag extension column."
     ::= { testAugExtEntry 6 }
 
 testAugExt07Address OBJECT-TYPE
     SYNTAX      IpAddress
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Address extension column"
+    DESCRIPTION
+        "Address extension column."
     ::= { testAugExtEntry 7 }
 
 testAugExt08Payload OBJECT-TYPE
     SYNTAX      OCTET STRING (SIZE (0..128))
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Payload extension column"
+    DESCRIPTION
+        "Payload extension column."
     ::= { testAugExtEntry 8 }
 
 testAugExt09Flag OBJECT-TYPE
@@ -359,71 +477,21 @@ testAugExt09Flag OBJECT-TYPE
                 }
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Boolean-like extension column"
+    DESCRIPTION
+        "Boolean-like flag extension column."
     ::= { testAugExtEntry 9 }
 
 testAugExt10Code OBJECT-TYPE
     SYNTAX      Unsigned32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Code extension column"
+    DESCRIPTION
+        "Code extension column."
     ::= { testAugExtEntry 10 }
-
-endPointTable OBJECT-TYPE
-    SYNTAX      SEQUENCE OF EndPointEntry
-    MAX-ACCESS  not-accessible
-    STATUS      current
-    DESCRIPTION "Table for endpoint configuration"
-    ::= { testEnumObjects 3 }
-
-endPointEntry OBJECT-TYPE
-    SYNTAX      EndPointEntry
-    MAX-ACCESS  not-accessible
-    STATUS      current
-    DESCRIPTION "An entry in the endpoint table"
-    INDEX       { endPointIpAddress, endPointPort }
-    ::= { endPointTable 1 }
-
-EndPointEntry ::= SEQUENCE {
-    endPointIpAddress   IpAddress,
-    endPointPort        Unsigned32,
-    endPointName        DisplayString,
-    endPointNotes       DisplayString
-}
-
-endPointIpAddress OBJECT-TYPE
-    SYNTAX      IpAddress
-    MAX-ACCESS  not-accessible
-    STATUS      current
-    DESCRIPTION "IP address of the endpoint"
-    ::= { endPointEntry 1 }
-
-endPointPort OBJECT-TYPE
-    SYNTAX      Unsigned32 (1..65535)
-    MAX-ACCESS  not-accessible
-    STATUS      current
-    DESCRIPTION "Port number of the endpoint"
-    ::= { endPointEntry 2 }
-
-endPointName OBJECT-TYPE
-    SYNTAX      DisplayString (SIZE (0..255))
-    MAX-ACCESS  read-write
-    STATUS      current
-    DESCRIPTION "Name of the endpoint"
-    ::= { endPointEntry 3 }
-
-endPointNotes OBJECT-TYPE
-    SYNTAX      DisplayString (SIZE (0..1024))
-    MAX-ACCESS  read-write
-    STATUS      current
-    DESCRIPTION "Notes about the endpoint"
-    ::= { endPointEntry 4 }
 
 -- ============================================================
 -- Notifications
 -- ============================================================
-
-testEnumNotifications OBJECT IDENTIFIER ::= { testEnumMIB 0 }
 
 endPointStatusChange NOTIFICATION-TYPE
     OBJECTS {
@@ -432,7 +500,7 @@ endPointStatusChange NOTIFICATION-TYPE
         endPointName,
         endPointNotes
     }
-    STATUS current
+    STATUS      current
     DESCRIPTION
         "Notification sent when an endpoint status changes.
          Includes both index columns (IP address and port) plus
@@ -443,35 +511,107 @@ completionTrap NOTIFICATION-TYPE
     OBJECTS { completionSource, completionCode }
     STATUS  current
     DESCRIPTION
-        "Sent when an internal equipment command or action has completed."
+        "Sent when an internal equipment command or action has
+         completed."
     ::= { testEnumNotifications 2 }
 
 eventTrap NOTIFICATION-TYPE
     OBJECTS { eventSeverity, eventText }
     STATUS  current
     DESCRIPTION
-        "Sent for equipment events/alarms."
+        "Sent for equipment events and alarms."
     ::= { testEnumNotifications 3 }
 
 -- ============================================================
 -- Conformance
 -- ============================================================
 
-testEnumConformance OBJECT IDENTIFIER ::= { testEnumMIB 2 }
+testEnumCompliance MODULE-COMPLIANCE
+    STATUS      current
+    DESCRIPTION
+        "Compliance statement for the test enum MIB."
+    MODULE
+        MANDATORY-GROUPS {
+            testEnumScalarGroup,
+            testEnumTableGroup,
+            testEndPointTableGroup,
+            testInferenceTableGroup,
+            testAugBaseTableGroup,
+            testAugExtTableGroup,
+            testEnumNotificationGroup
+        }
+    ::= { testEnumConformance 1 }
 
-testEnumGroup OBJECT-GROUP
+testEnumScalarGroup OBJECT-GROUP
     OBJECTS {
         testColour,
-        testPriority,
+        testPriority
+    }
+    STATUS      current
+    DESCRIPTION
+        "Read-only scalar objects."
+    ::= { testEnumConformance 2 }
+
+testEnumTableGroup OBJECT-GROUP
+    OBJECTS {
         testRowColour,
         testRowPriority,
-        testRowStatus,
+        testRowStatus
+    }
+    STATUS      current
+    DESCRIPTION
+        "Accessible columns of the test enum table."
+    ::= { testEnumConformance 3 }
+
+testEndPointTableGroup OBJECT-GROUP
+    OBJECTS {
         endPointName,
         endPointNotes
     }
-    STATUS  current
-    DESCRIPTION "Test objects"
-    ::= { testEnumConformance 1 }
+    STATUS      current
+    DESCRIPTION
+        "Accessible columns of the endpoint table."
+    ::= { testEnumConformance 4 }
+
+testInferenceTableGroup OBJECT-GROUP
+    OBJECTS {
+        testInferenceValue
+    }
+    STATUS      current
+    DESCRIPTION
+        "Accessible columns of the inference table."
+    ::= { testEnumConformance 5 }
+
+testAugBaseTableGroup OBJECT-GROUP
+    OBJECTS {
+        testAugBase01Int,
+        testAugBase02Unsigned,
+        testAugBase03Name,
+        testAugBase04Address,
+        testAugBase05Payload
+    }
+    STATUS      current
+    DESCRIPTION
+        "Accessible columns of the augmented base table."
+    ::= { testEnumConformance 6 }
+
+testAugExtTableGroup OBJECT-GROUP
+    OBJECTS {
+        testAugExt01Status,
+        testAugExt02Counter,
+        testAugExt03Rate,
+        testAugExt04LastChange,
+        testAugExt05Owner,
+        testAugExt06Tag,
+        testAugExt07Address,
+        testAugExt08Payload,
+        testAugExt09Flag,
+        testAugExt10Code
+    }
+    STATUS      current
+    DESCRIPTION
+        "Accessible columns of the augmented extension table."
+    ::= { testEnumConformance 7 }
 
 testEnumNotificationGroup NOTIFICATION-GROUP
     NOTIFICATIONS {
@@ -479,15 +619,9 @@ testEnumNotificationGroup NOTIFICATION-GROUP
         completionTrap,
         eventTrap
     }
-    STATUS  current
-    DESCRIPTION "Test notifications"
-    ::= { testEnumConformance 2 }
-
-testEnumCompliance MODULE-COMPLIANCE
-    STATUS  current
-    DESCRIPTION "Compliance"
-    MODULE
-        MANDATORY-GROUPS { testEnumGroup, testEnumNotificationGroup }
-    ::= { testEnumConformance 3 }
+    STATUS      current
+    DESCRIPTION
+        "Notifications defined in this MIB."
+    ::= { testEnumConformance 8 }
 
 END
