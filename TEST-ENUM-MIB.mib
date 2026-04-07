@@ -250,6 +250,88 @@ endPointNotes OBJECT-TYPE
     ::= { endPointEntry 4 }
 
 -- ============================================================
+-- Multi-Index RowStatus Table
+-- ============================================================
+
+testAddrStatusTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TestAddrStatusEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Table that combines IpAddress and slot indexes with RowStatus
+         lifecycle semantics."
+    ::= { testEnumObjects 7 }
+
+testAddrStatusEntry OBJECT-TYPE
+    SYNTAX      TestAddrStatusEntry
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "An entry identified by {address, slot}."
+    INDEX       { testAddrStatusAddress, testAddrStatusSlot }
+    ::= { testAddrStatusTable 1 }
+
+TestAddrStatusEntry ::= SEQUENCE {
+    testAddrStatusAddress  IpAddress,
+    testAddrStatusSlot     Unsigned32,
+    testAddrStatusColour   INTEGER,
+    testAddrStatusPriority INTEGER,
+    testAddrStatusRowStatus RowStatus
+}
+
+testAddrStatusAddress OBJECT-TYPE
+    SYNTAX      IpAddress
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "IPv4 address index component for the multi-index RowStatus table."
+    ::= { testAddrStatusEntry 1 }
+
+testAddrStatusSlot OBJECT-TYPE
+    SYNTAX      Unsigned32 (1..65535)
+    MAX-ACCESS  not-accessible
+    STATUS      current
+    DESCRIPTION
+        "Slot index component for the multi-index RowStatus table."
+    ::= { testAddrStatusEntry 2 }
+
+testAddrStatusColour OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    red(1),
+                    green(2),
+                    blue(3),
+                    yellow(4)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Colour payload column for the multi-index RowStatus table."
+    ::= { testAddrStatusEntry 3 }
+
+testAddrStatusPriority OBJECT-TYPE
+    SYNTAX      INTEGER {
+                    low(10),
+                    medium(20),
+                    high(30),
+                    critical(50)
+                }
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Priority payload column for the multi-index RowStatus table."
+    ::= { testAddrStatusEntry 4 }
+
+testAddrStatusRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Row lifecycle for testAddrStatusTable. Managers can create rows
+         with createAndGo(4) or createAndWait(5), activate with active(1),
+         and remove with destroy(6)."
+    ::= { testAddrStatusEntry 5 }
+
+-- ============================================================
 -- Inference Table
 -- ============================================================
 
@@ -535,6 +617,7 @@ testEnumCompliance MODULE-COMPLIANCE
             testEnumScalarGroup,
             testEnumTableGroup,
             testEndPointTableGroup,
+            testAddrStatusTableGroup,
             testInferenceTableGroup,
             testAugBaseTableGroup,
             testAugExtTableGroup,
@@ -581,6 +664,17 @@ testInferenceTableGroup OBJECT-GROUP
     DESCRIPTION
         "Accessible columns of the inference table."
     ::= { testEnumConformance 5 }
+
+testAddrStatusTableGroup OBJECT-GROUP
+    OBJECTS {
+        testAddrStatusColour,
+        testAddrStatusPriority,
+        testAddrStatusRowStatus
+    }
+    STATUS      current
+    DESCRIPTION
+        "Accessible columns of the multi-index RowStatus table."
+    ::= { testEnumConformance 9 }
 
 testAugBaseTableGroup OBJECT-GROUP
     OBJECTS {
