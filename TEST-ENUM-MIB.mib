@@ -5,14 +5,16 @@ IMPORTS
         FROM SNMPv2-SMI
     MODULE-COMPLIANCE, OBJECT-GROUP, NOTIFICATION-GROUP
         FROM SNMPv2-CONF
-    DisplayString
+    DisplayString, RowStatus
         FROM SNMPv2-TC;
 
 testEnumMIB MODULE-IDENTITY
-    LAST-UPDATED "202603300000Z"
+    LAST-UPDATED "202604020000Z"
     ORGANIZATION "Test"
     CONTACT-INFO "test"
     DESCRIPTION  "MIB for testing inline enum handling with no zero value"
+    REVISION     "202604020000Z"
+    DESCRIPTION  "Added RowStatus-driven createAndGo/createAndWait semantics to testEnumTable"
     REVISION     "202603300000Z"
     DESCRIPTION  "Added completion and event notification examples for trap testing"
     REVISION     "202602060000Z"
@@ -105,7 +107,8 @@ testEnumEntry OBJECT-TYPE
 TestEnumEntry ::= SEQUENCE {
     testEnumIndex       Unsigned32,
     testRowColour       INTEGER,
-    testRowPriority     INTEGER
+    testRowPriority     INTEGER,
+    testRowStatus       RowStatus
 }
 
 testEnumIndex OBJECT-TYPE
@@ -122,7 +125,7 @@ testRowColour OBJECT-TYPE
                     blue(3),
                     yellow(4)
                 }
-    MAX-ACCESS  read-only
+    MAX-ACCESS  read-create
     STATUS      current
     DESCRIPTION "A colour column with no zero value in the enumeration"
     ::= { testEnumEntry 2 }
@@ -134,51 +137,62 @@ testRowPriority OBJECT-TYPE
                     high(30),
                     critical(50)
                 }
-    MAX-ACCESS  read-only
+    MAX-ACCESS  read-create
     STATUS      current
     DESCRIPTION "Priority column with non-contiguous values"
     ::= { testEnumEntry 3 }
+
+testRowStatus OBJECT-TYPE
+    SYNTAX      RowStatus
+    MAX-ACCESS  read-create
+    STATUS      current
+    DESCRIPTION
+        "Row lifecycle control for testEnumTable.
+         Managers can create rows with createAndGo(4) or createAndWait(5),
+         activate with active(1), and remove with destroy(6)."
+    ::= { testEnumEntry 4 }
 
 -- ============================================================
 -- EndPoint Table
 -- ============================================================
 
 -- ============================================================
--- No-Index Table (invalid by spec, used for inference testing)
+-- Inference Table (single-index shape for parser/inference testing)
 -- ============================================================
 
-testNoIndexTable OBJECT-TYPE
-    SYNTAX      SEQUENCE OF TestNoIndexEntry
+testInferenceTable OBJECT-TYPE
+    SYNTAX      SEQUENCE OF TestInferenceEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Table with entry that omits INDEX (intentionally invalid)"
+    DESCRIPTION "Table with a single-column index used for parser/inference testing"
     ::= { testEnumObjects 4 }
 
-testNoIndexEntry OBJECT-TYPE
-    SYNTAX      TestNoIndexEntry
+testInferenceEntry OBJECT-TYPE
+    SYNTAX      TestInferenceEntry
     MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Entry without INDEX for inference testing"
-    ::= { testNoIndexTable 1 }
+    DESCRIPTION "Entry with a simple single-column index for inference testing"
+    INDEX       { testInferenceIndex }
+    ::= { testInferenceTable 1 }
 
-TestNoIndexEntry ::= SEQUENCE {
-    testNoIndexValueA   Integer32,
-    testNoIndexValueB   Integer32
+TestInferenceEntry ::= SEQUENCE {
+    testInferenceIndex  Integer32,
+    testInferenceValue  Integer32
 }
 
-testNoIndexValueA OBJECT-TYPE
+testInferenceIndex OBJECT-TYPE
     SYNTAX      Integer32
-    MAX-ACCESS  read-only
+    MAX-ACCESS  not-accessible
     STATUS      current
-    DESCRIPTION "Single column used as inferred index"
-    ::= { testNoIndexEntry 1 }
+    DESCRIPTION "Primary row index column used to identify each testInferenceEntry row"
+    ::= { testInferenceEntry 1 }
 
-testNoIndexValueB OBJECT-TYPE
+testInferenceValue OBJECT-TYPE
     SYNTAX      Integer32
     MAX-ACCESS  read-only
     STATUS      current
-    DESCRIPTION "Single column used as inferred index"
-    ::= { testNoIndexEntry 2 }
+    DESCRIPTION "Non-index payload column used for inference and value decoding checks"
+    ::= { testInferenceEntry 2 }
 
 -- ============================================================
 -- Augmented Table Pair
@@ -451,6 +465,7 @@ testEnumGroup OBJECT-GROUP
         testPriority,
         testRowColour,
         testRowPriority,
+        testRowStatus,
         endPointName,
         endPointNotes
     }
